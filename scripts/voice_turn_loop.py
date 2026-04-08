@@ -44,7 +44,13 @@ def preload_vosk_model() -> None:
 
 
 def ask_llm(user_text: str, history: list = None) -> str:
-    messages = [{"role": "system", "content": "한국어로 한두 문장만 아주 짧게 답하세요."}]
+    messages = [{"role": "system", "content": (
+        "당신은 헬스장 카운터 직원입니다. "
+        "회원들에게 항상 친근하고 밝게 대화하세요. "
+        "운동, 식단, 헬스 관련 질문에는 전문 지식을 바탕으로 구체적이고 실용적으로 답하세요. "
+        "헬스와 무관한 일상 대화에도 따뜻하게 응대하세요. "
+        "답변은 반드시 한국어로, 최대 3문장 이내로 간결하게 답하세요."
+    )}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": user_text})
