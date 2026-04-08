@@ -14,7 +14,7 @@ ROOT = Path("/home/radxa/voice-chat")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.voice_turn_loop import ask_llm, preload_vosk_model, speak_ko_espeak, transcribe_ko
+from scripts.voice_turn_loop import ask_llm, preload_vosk_model, speak_tts, transcribe_ko
 
 UPLOAD_DIR = ROOT / "uploads"
 LOG_LIMIT = 50
@@ -110,7 +110,7 @@ def play_wav(path: Path) -> None:
 
 
 def speak_async(text: str) -> None:
-    thread = threading.Thread(target=speak_ko_espeak, args=(text, OUTPUT_SINK), daemon=True)
+    thread = threading.Thread(target=speak_tts, args=(text, OUTPUT_SINK), daemon=True)
     thread.start()
 
 
