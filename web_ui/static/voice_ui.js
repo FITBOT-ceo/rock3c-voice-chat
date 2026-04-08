@@ -73,7 +73,7 @@ function renderMessages(messages) {
 
         const role = document.createElement('span');
         role.className = 'msg-role';
-        role.textContent = msg.role === 'assistant' ? 'Gemma 4' : msg.role === 'user' ? '나' : '시스템';
+        role.textContent = msg.role === 'assistant' ? 'AI' : msg.role === 'user' ? '나' : '시스템';
 
         const text = document.createElement('div');
         text.textContent = msg.text;

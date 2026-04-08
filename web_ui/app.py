@@ -14,7 +14,7 @@ ROOT = Path("/home/radxa/voice-chat")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.voice_turn_loop import ask_gemma, preload_vosk_model, speak_ko_espeak, transcribe_ko
+from scripts.voice_turn_loop import ask_llm, preload_vosk_model, speak_ko_espeak, transcribe_ko
 
 UPLOAD_DIR = ROOT / "uploads"
 LOG_LIMIT = 50
@@ -43,6 +43,14 @@ def add_log(role: str, text: str) -> None:
 def get_logs():
     with log_lock:
         return list(conversation_log)
+
+
+def get_recent_history(n_turns: int = 3) -> list:
+    """최근 n턴(user+assistant 쌍)을 LLM messages 형식으로 반환."""
+    with log_lock:
+        chat_msgs = [m for m in conversation_log if m["role"] in ("user", "assistant")]
+        recent = chat_msgs[-(n_turns * 2):]
+        return [{"role": m["role"], "content": m["text"]} for m in recent]
 
 
 def convert_audio_to_wav(src: Path, dst: Path) -> None:
@@ -176,10 +184,11 @@ def chat():
             )
             return jsonify({"ok": False, "error": "음성이 인식되지 않았습니다. 최근 녹음 재생으로 실제 입력을 확인해 주세요.", "audio_info": info, "timing": {"convert_ms": convert_ms, "stt_ms": stt_ms, "llm_ms": 0, "tts_ms": 0, "total_ms": total_ms}}), 422
 
+        history = get_recent_history(3)
         add_log("user", user_text)
 
         llm_started = time.perf_counter()
-        reply = ask_gemma(user_text)
+        reply = ask_llm(user_text, history)
         llm_ms = round((time.perf_counter() - llm_started) * 1000, 1)
         add_log("assistant", reply)
 

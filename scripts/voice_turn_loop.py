@@ -43,17 +43,23 @@ def preload_vosk_model() -> None:
     pass
 
 
-def ask_gemma(user_text: str) -> str:
+def ask_llm(user_text: str, history: list = None) -> str:
+    messages = [{"role": "system", "content": "한국어로 한두 문장만 아주 짧게 답하세요."}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_text})
     response = _client().chat.completions.create(
         model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": "한국어로 한두 문장만 아주 짧게 답하세요."},
-            {"role": "user", "content": user_text},
-        ],
-        max_tokens=100,
+        messages=messages,
+        max_tokens=150,
         temperature=0.3,
     )
     return response.choices[0].message.content.strip()
+
+
+# 하위 호환
+def ask_gemma(user_text: str) -> str:
+    return ask_llm(user_text)
 
 
 def speak_ko_espeak(text: str, sink: str) -> None:
