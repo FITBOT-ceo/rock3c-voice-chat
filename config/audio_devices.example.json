@@ -1,0 +1,12 @@
+{
+  "detected_on_2026-04-08": {
+    "alsa_playback_cards": [
+      "card 2: Audio [AB13X USB Audio], device 0: USB Audio"
+    ],
+    "alsa_capture_cards": [
+      "card 2: Audio [AB13X USB Audio], device 0: USB Audio"
+    ],
+    "pulseaudio_sink": "alsa_output.usb-Generic_AB13X_USB_Audio_20210926172016-00.analog-stereo",
+    "pulseaudio_source": "alsa_input.usb-Generic_AB13X_USB_Audio_20210926172016-00.mono-fallback"
+  }
+}

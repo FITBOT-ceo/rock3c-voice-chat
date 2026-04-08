@@ -1,0 +1,32 @@
+{
+  "llm": {
+    "engine": "llama.cpp",
+    "model_family": "gemma4",
+    "model_variant": "E2B",
+    "quantization": "Q4_K_M",
+    "context_length": 2048,
+    "threads": 4,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_tokens": 256
+  },
+  "stt": {
+    "engine": "vosk",
+    "language": "ko-KR",
+    "sample_rate": 16000
+  },
+  "tts": {
+    "engine": "piper",
+    "voice": "ko_KR-placeholder",
+    "sample_rate": 22050
+  },
+  "audio": {
+    "input_device": "usb_mic_placeholder",
+    "output_device": "usb_speaker_placeholder"
+  },
+  "conversation": {
+    "mode": "turn_based",
+    "wake_word": false,
+    "push_to_talk": false
+  }
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=Rock 3C Local Voice Assistant
+After=network-online.target sound.target graphical-session.target pulseaudio.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=radxa
+WorkingDirectory=/home/radxa/voice-chat
+Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/home/radxa/voice-chat/scripts/run_voice_assistant.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/radxa/voice-chat/logs/voice-assistant.log
+StandardError=append:/home/radxa/voice-chat/logs/voice-assistant.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rock 3C Voice UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='voice_ui.css') }}">
+</head>
+<body>
+    <main class="voice-shell">
+        <header class="voice-header">
+            <div>
+                <h1>Rock 3C 로컬 음성 대화</h1>
+                <p>녹음 버튼을 누르고 말한 뒤, 중지하면 Gemma 4가 대답합니다.</p>
+            </div>
+            <div class="status-box" id="statusBox">대기 중</div>
+        </header>
+
+        <section class="controls-panel">
+            <button id="startBtn" class="action-btn start-btn">녹음 시작</button>
+            <button id="stopBtn" class="action-btn stop-btn" disabled>중지 후 전송</button>
+        </section>
+
+        <section class="controls-panel secondary-panel">
+            <label class="audio-select-wrap">
+                <span>입력 마이크 선택</span>
+                <select id="inputDeviceSelect" class="audio-select"></select>
+            </label>
+            <div id="trackInfo" class="audio-info">브라우저 입력 장치 정보 없음</div>
+            <button id="playLastBtn" class="action-btn secondary-btn">최근 녹음 재생</button>
+            <div id="audioInfo" class="audio-info">최근 녹음 정보 없음</div>
+        </section>
+
+        <section class="log-panel">
+            <div class="log-title">대화 로그</div>
+            <div id="logList" class="log-list"></div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='voice_ui.js') }}"></script>
+</body>
+</html>

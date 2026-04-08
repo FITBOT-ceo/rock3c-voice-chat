@@ -1,0 +1,20 @@
+[Unit]
+Description=Rock 3C Voice Web UI
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=radxa
+WorkingDirectory=/home/radxa/voice-chat
+Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=GROQ_API_KEY=your_groq_api_key_here
+ExecStart=/home/radxa/voice-chat/scripts/run_voice_web.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/radxa/voice-chat/logs/voice-web.log
+StandardError=append:/home/radxa/voice-chat/logs/voice-web.log
+
+[Install]
+WantedBy=multi-user.target

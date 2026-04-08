@@ -1,0 +1,17 @@
+[Unit]
+Description=Rock 3C Local LLM Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=radxa
+WorkingDirectory=/home/radxa/voice-chat
+ExecStart=/home/radxa/voice-chat/scripts/run_llama_server.sh
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/radxa/voice-chat/logs/llm-server.log
+StandardError=append:/home/radxa/voice-chat/logs/llm-server.log
+
+[Install]
+WantedBy=multi-user.target
