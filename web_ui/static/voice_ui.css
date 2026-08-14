@@ -51,6 +51,26 @@ body {
     font-weight: 700;
 }
 
+.status-box.status-ready {
+    background: rgba(16, 185, 129, 0.18);
+    color: #d1fae5;
+}
+
+.status-box.status-busy {
+    background: rgba(59, 130, 246, 0.18);
+    color: #dbeafe;
+}
+
+.status-box.status-warn {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fde68a;
+}
+
+.status-box.status-error {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
+}
+
 .controls-panel {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -115,6 +135,42 @@ body {
     color: #cbd5e1;
     line-height: 1.45;
     font-size: 0.95rem;
+}
+
+.runtime-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 20px;
+}
+
+.runtime-mode {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.18);
+    color: #d1fae5;
+    font-weight: 800;
+}
+
+.runtime-error {
+    background: rgba(239, 68, 68, 0.14);
+    color: #fecaca;
+}
+
+.guide-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 20px;
+}
+
+.guide-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #f8fafc;
 }
 
 .log-panel {

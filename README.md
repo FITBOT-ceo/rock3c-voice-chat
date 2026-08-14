@@ -22,7 +22,7 @@
 - 스피커 재생: 장치 레벨 재생 명령 성공
 - 실제 음향 루프백 기준 주 출력 경로: `rk809` 아날로그 출력(card 1)
 
-Gemma 4 로컬 실행 경로는 현재 조사 기준으로 아래 순서가 가장 현실적이다.
+로컬 전용 실험 경로는 현재 조사 기준으로 아래 순서가 가장 현실적이다.
 
 1. `llama.cpp` + Qwen2.5 1.5B Instruct GGUF
 2. 경량 STT (`Vosk` 또는 `whisper.cpp tiny/base`)
@@ -57,11 +57,19 @@ Gemma 4 로컬 실행 경로는 현재 조사 기준으로 아래 순서가 가�
 
 ## 현재 음성 파이프라인 상태
 
+현재 저장소의 기본 웹 런타임은 Groq API 기반이다.
+
+- STT: Groq Whisper (`whisper-large-v3-turbo`)
+- LLM: Groq Chat (`llama-3.3-70b-versatile`)
+- TTS: `edge-tts` 기본, 필요 시 `espeak-ng` 또는 `ElevenLabs` 전환
+
+로컬 전용 검증 결과는 아래와 같이 별도로 확보되어 있다.
+
 - Korean STT: `vosk-model-small-ko-0.22` 로드 확인
 - Korean TTS: `espeak-ng -v ko` WAV 생성 및 음향 루프백 검증 완료
 - Piper TTS: 공식 영어 보이스는 동작 확인, 비공식 한국어 보이스는 `pygoruut` 호환 문제로 보류
 
-현재 가장 안정적인 1차 음성 루프는 다음 조합이다.
+로컬 단독 구동 기준 가장 안정적인 1차 음성 루프는 다음 조합이다.
 
 - STT: Vosk Korean
 - LLM: Qwen2.5 1.5B Q4_K_M
@@ -69,13 +77,16 @@ Gemma 4 로컬 실행 경로는 현재 조사 기준으로 아래 순서가 가�
 
 ## 현재 최적화 상태
 
-현재 웹 UI는 다음 구조로 최적화되었다.
+현재 웹 UI는 다음 구조로 동작한다.
 
-- STT: 웹 앱 시작 시 `Vosk` 모델 사전 로드
-- LLM: 매 요청마다 `llama-cli`를 띄우지 않고 `rock3c-llm.service`로 `llama-server` 상주 실행
+- STT/LLM: 요청 시 Groq API 호출
+- 부트스트랩: 웹 앱 시작 시 필수 API 키/런타임 설정 검증
 - TTS: 응답 JSON 반환 후 백그라운드 재생
+- 화면 표시: 현재 provider 조합과 점검 실패 사유를 웹 UI에서 바로 확인 가능
 
-즉, 이전의 `CLI 1회 실행형` 구조보다 현재 `상주형 서버` 구조가 더 빠르다.
+즉, 현재 서비스 경로는 로컬 `llama.cpp` 상주형이 아니라 Groq API 경로를 기본값으로 사용한다.
+
+로컬 비교 검증이 필요할 때는 같은 웹 UI에서 `STT_PROVIDER`, `LLM_PROVIDER`, `TTS_PROVIDER` 조합만 바꿔 실행 경로를 분리할 수 있다.
 
 ## 최근 측정 결과
 
@@ -88,7 +99,7 @@ Gemma 4 로컬 실행 경로는 현재 조사 기준으로 아래 순서가 가�
   - `tts_ms`: `7940.9`
   - `total_ms`: `61911.6`
 
-- 현재 (`Qwen 1.5B`, llama-server 상주형 + Vosk preload + TTS async):
+- 로컬 실험 (`Qwen 1.5B`, llama-server 상주형 + Vosk preload + TTS async):
   - `convert_ms`: `693.7`
   - `stt_ms`: `17291.5`
   - `llm_ms`: `18573.7`
@@ -99,20 +110,18 @@ Gemma 4 로컬 실행 경로는 현재 조사 기준으로 아래 순서가 가�
 
 버튼 기반 웹 UI 엔트리포인트:
 
-- `rock3c/voice_chat/web_ui/app.py`
-- `rock3c/voice_chat/scripts/run_voice_web.sh`
-- `rock3c/voice_chat/systemd/rock3c-voice-web.service`
+- 저장소 기준: `web_ui/app.py`, `scripts/run_voice_web.sh`, `systemd/rock3c-voice-web.service`
+- 보드 기준: `/home/radxa/voice-chat/web_ui/app.py`, `/home/radxa/voice-chat/scripts/run_voice_web.sh`, `/home/radxa/voice-chat/systemd/rock3c-voice-web.service`
 
 상시 대기용 엔트리포인트:
 
-- `rock3c/voice_chat/scripts/voice_assistant_daemon.py`
-- `rock3c/voice_chat/scripts/run_voice_assistant.sh`
-- `rock3c/voice_chat/systemd/rock3c-voice-assistant.service`
+- 저장소 기준: `scripts/voice_assistant_daemon.py`, `scripts/run_voice_assistant.sh`, `systemd/rock3c-voice-assistant.service`
+- 보드 기준: `/home/radxa/voice-chat/scripts/voice_assistant_daemon.py`, `/home/radxa/voice-chat/scripts/run_voice_assistant.sh`, `/home/radxa/voice-chat/systemd/rock3c-voice-assistant.service`
 
 ## 폴더 구성
 
 ```text
-rock3c/voice_chat/
+.
 ├── README.md
 ├── config/
 │   ├── audio_devices.example.json
@@ -148,6 +157,7 @@ rock3c/voice_chat/
 - [설치/환경 준비](./docs/VOICE_CHAT_SETUP.md)
 - [모델 선택 메모](./docs/VOICE_CHAT_MODEL_NOTES.md)
 - [실행/검증 절차](./docs/VOICE_CHAT_RUNBOOK.md)
+- [로컬 기본 후보 검증 메모](./docs/LOCAL_VOICE_PATH_CANDIDATE_REVIEW.md)
 - [버튼 기반 웹 UI 서비스 유닛](./systemd/rock3c-voice-web.service)
 - [상시 대기 서비스 유닛](./systemd/rock3c-voice-assistant.service)
 - [한 턴 음성 루프 스크립트](./scripts/voice_turn_loop.py)

@@ -14,7 +14,14 @@ ROOT = Path("/home/radxa/voice-chat")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.voice_turn_loop import ask_llm, preload_vosk_model, speak_tts, transcribe_ko
+from scripts.voice_turn_loop import (
+    ask_llm,
+    preload_runtime,
+    runtime_config_details,
+    runtime_config_summary,
+    speak_tts,
+    transcribe_ko,
+)
 
 UPLOAD_DIR = ROOT / "uploads"
 LOG_LIMIT = 50
@@ -25,6 +32,7 @@ OUTPUT_SINK = "alsa_output.platform-rk809-sound.HiFi__hw_rockchiprk809__sink"
 app = Flask(__name__, template_folder="templates", static_folder="static")
 conversation_log = []
 log_lock = threading.Lock()
+runtime_state = {"ready": False, "error": "아직 런타임을 확인하지 않았습니다.", "details": runtime_config_details()}
 
 
 def add_log(role: str, text: str) -> None:
@@ -43,6 +51,24 @@ def add_log(role: str, text: str) -> None:
 def get_logs():
     with log_lock:
         return list(conversation_log)
+
+
+def get_runtime_state() -> dict:
+    return {
+        "ready": runtime_state["ready"],
+        "error": runtime_state.get("error"),
+        "details": runtime_state["details"],
+    }
+
+
+def refresh_runtime_state() -> dict:
+    details = runtime_config_details()
+    try:
+        preload_runtime()
+        runtime_state.update({"ready": True, "error": None, "details": details})
+    except Exception as exc:
+        runtime_state.update({"ready": False, "error": str(exc), "details": details})
+    return get_runtime_state()
 
 
 def get_recent_history(n_turns: int = 3) -> list:
@@ -124,6 +150,11 @@ def history():
     return jsonify({"ok": True, "messages": get_logs()})
 
 
+@app.route("/api/runtime")
+def runtime_status():
+    return jsonify({"ok": True, "runtime": get_runtime_state()})
+
+
 @app.route("/api/debug/last-audio")
 def last_audio_info():
     if not DEBUG_WAV_PATH.exists():
@@ -150,6 +181,9 @@ def play_last_audio():
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
+    if not runtime_state["ready"]:
+        return jsonify({"ok": False, "error": runtime_state["error"], "runtime": get_runtime_state()}), 503
+
     audio_file = request.files.get("audio")
     if not audio_file or not audio_file.filename:
         return jsonify({"ok": False, "error": "오디오 파일이 없습니다."}), 400
@@ -220,6 +254,7 @@ def chat():
                 "ok": True,
                 "user_text": user_text,
                 "assistant_text": reply,
+                "runtime": get_runtime_state(),
                 "audio_info": probe_audio_file(DEBUG_WAV_PATH),
                 "timing": timing,
                 "messages": get_logs(),
@@ -237,7 +272,13 @@ def chat():
 def ensure_bootstrap_logs() -> None:
     if not get_logs():
         add_log("system", "음성 UI가 준비되었습니다. [녹음 시작]을 눌러 말한 뒤 [중지]를 누르세요.")
-    preload_vosk_model()
+    state = refresh_runtime_state()
+    add_log("system", f"현재 실행 경로: {runtime_config_summary()}")
+    add_log("system", f"현재 모드: {state['details']['mode']}")
+    if state["ready"]:
+        add_log("system", "런타임 필수 구성요소 점검이 완료되었습니다.")
+    else:
+        add_log("system", f"런타임 점검 실패: {state['error']}")
 
 
 if __name__ == "__main__":

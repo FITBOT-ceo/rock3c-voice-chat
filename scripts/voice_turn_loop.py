@@ -1,18 +1,25 @@
 import argparse
 import asyncio
+import json
 import os
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
+import wave
 from pathlib import Path
-
-from groq import Groq
 
 ROOT = Path("/home/radxa/voice-chat")
 DEFAULT_ALSA_INPUT = "plughw:2,0"
 DEFAULT_PULSE_SINK = "alsa_output.platform-rk809-sound.HiFi__hw_rockchiprk809__sink"
 STT_MODEL = "whisper-large-v3-turbo"
 LLM_MODEL = "llama-3.3-70b-versatile"
+STT_PROVIDER = os.environ.get("STT_PROVIDER", "groq").strip().lower()
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "groq").strip().lower()
+VOSK_MODEL_PATH = Path(os.environ.get("VOSK_MODEL_PATH", str(ROOT / "models" / "vosk-model-small-ko-0.22")))
+LLAMA_SERVER_URL = os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8080").rstrip("/")
+LLAMA_SERVER_MODEL = os.environ.get("LLAMA_SERVER_MODEL", "local-model")
 
 # TTS 설정 (환경변수로 전환)
 # TTS_PROVIDER: espeak | edge | elevenlabs
@@ -21,11 +28,24 @@ EDGE_TTS_VOICE = os.environ.get("EDGE_TTS_VOICE", "ko-KR-SunHiNeural")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB")
 
 _groq_client = None
+_vosk_model = None
 
 
-def _client() -> Groq:
+def _runtime_mode_label() -> str:
+    if STT_PROVIDER == "groq" and LLM_PROVIDER == "groq":
+        return "기본 운영 경로"
+    if STT_PROVIDER == "vosk" and LLM_PROVIDER == "llama":
+        return "로컬 실험 경로"
+    return "혼합 검증 경로"
+
+
+def _client():
     global _groq_client
     if _groq_client is None:
+        try:
+            from groq import Groq
+        except ImportError as exc:
+            raise RuntimeError("groq 패키지가 설치되지 않았습니다.") from exc
         api_key = os.environ.get("GROQ_API_KEY", "")
         if not api_key:
             raise RuntimeError("GROQ_API_KEY 환경변수가 설정되지 않았습니다.")
@@ -33,7 +53,27 @@ def _client() -> Groq:
     return _groq_client
 
 
-def transcribe_ko(wav_path: Path) -> str:
+def _normalize_provider(kind: str, provider: str, allowed: set[str]) -> str:
+    if provider not in allowed:
+        allowed_text = ", ".join(sorted(allowed))
+        raise RuntimeError(f"{kind}_PROVIDER 값이 올바르지 않습니다: {provider} (허용: {allowed_text})")
+    return provider
+
+
+def _load_vosk_model():
+    global _vosk_model
+    if _vosk_model is None:
+        if not VOSK_MODEL_PATH.exists():
+            raise RuntimeError(f"VOSK_MODEL_PATH 경로를 찾을 수 없습니다: {VOSK_MODEL_PATH}")
+        try:
+            from vosk import Model
+        except ImportError as exc:
+            raise RuntimeError("vosk 패키지가 설치되지 않았습니다.") from exc
+        _vosk_model = Model(str(VOSK_MODEL_PATH))
+    return _vosk_model
+
+
+def _transcribe_groq(wav_path: Path) -> str:
     with open(wav_path, "rb") as f:
         result = _client().audio.transcriptions.create(
             file=(wav_path.name, f, "audio/wav"),
@@ -45,8 +85,146 @@ def transcribe_ko(wav_path: Path) -> str:
     return text.strip()
 
 
-def preload_vosk_model() -> None:
-    pass
+def _transcribe_vosk(wav_path: Path) -> str:
+    try:
+        from vosk import KaldiRecognizer
+    except ImportError as exc:
+        raise RuntimeError("vosk 패키지가 설치되지 않았습니다.") from exc
+
+    model = _load_vosk_model()
+    with wave.open(str(wav_path), "rb") as wav_file:
+        if wav_file.getnchannels() != 1:
+            raise RuntimeError("Vosk STT는 mono WAV 입력이 필요합니다.")
+        if wav_file.getsampwidth() != 2:
+            raise RuntimeError("Vosk STT는 16-bit WAV 입력이 필요합니다.")
+        recognizer = KaldiRecognizer(model, wav_file.getframerate())
+        recognizer.SetWords(False)
+        while True:
+            chunk = wav_file.readframes(4000)
+            if not chunk:
+                break
+            recognizer.AcceptWaveform(chunk)
+        result = json.loads(recognizer.FinalResult())
+    return (result.get("text") or "").strip()
+
+
+def transcribe_ko(wav_path: Path) -> str:
+    provider = _normalize_provider("STT", STT_PROVIDER, {"groq", "vosk"})
+    if provider == "vosk":
+        return _transcribe_vosk(wav_path)
+    return _transcribe_groq(wav_path)
+
+
+def _ping_llama_server() -> None:
+    req = urllib.request.Request(f"{LLAMA_SERVER_URL}/health", method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=3):
+            return
+    except Exception as health_exc:
+        tags_req = urllib.request.Request(f"{LLAMA_SERVER_URL}/v1/models", method="GET")
+        try:
+            with urllib.request.urlopen(tags_req, timeout=3):
+                return
+        except Exception as models_exc:
+            raise RuntimeError(
+                f"로컬 LLM 서버에 연결할 수 없습니다: {LLAMA_SERVER_URL}"
+            ) from models_exc
+
+
+def preload_runtime() -> None:
+    """Validate required runtime configuration at web app startup."""
+    _normalize_provider("STT", STT_PROVIDER, {"groq", "vosk"})
+    _normalize_provider("LLM", LLM_PROVIDER, {"groq", "llama"})
+    _normalize_provider("TTS", TTS_PROVIDER, {"edge", "elevenlabs", "espeak"})
+    if STT_PROVIDER == "groq" or LLM_PROVIDER == "groq":
+        _client()
+    if STT_PROVIDER == "vosk":
+        _load_vosk_model()
+    if LLM_PROVIDER == "llama":
+        _ping_llama_server()
+    if TTS_PROVIDER == "elevenlabs" and not os.environ.get("ELEVENLABS_API_KEY", ""):
+        raise RuntimeError("ELEVENLABS_API_KEY 환경변수가 설정되지 않았습니다.")
+
+
+def runtime_config_details() -> dict:
+    checks = []
+    if STT_PROVIDER == "groq":
+        checks.append("STT는 GROQ_API_KEY가 필요합니다.")
+    else:
+        checks.append(f"STT는 Vosk 모델 디렉터리가 필요합니다: {VOSK_MODEL_PATH}")
+
+    if LLM_PROVIDER == "groq":
+        checks.append("LLM은 GROQ_API_KEY가 필요합니다.")
+    else:
+        checks.append(f"LLM은 llama-server가 먼저 떠 있어야 합니다: {LLAMA_SERVER_URL}")
+
+    if TTS_PROVIDER == "elevenlabs":
+        checks.append("TTS는 ELEVENLABS_API_KEY가 필요합니다.")
+    elif TTS_PROVIDER == "espeak":
+        checks.append("TTS는 espeak-ng 실행 파일이 필요합니다.")
+    else:
+        checks.append("TTS는 edge-tts와 ffmpeg가 필요합니다.")
+
+    return {
+        "mode": _runtime_mode_label(),
+        "summary": runtime_config_summary(),
+        "providers": {
+            "stt": STT_PROVIDER,
+            "llm": LLM_PROVIDER,
+            "tts": TTS_PROVIDER,
+        },
+        "checks": checks,
+        "llama_server_url": LLAMA_SERVER_URL,
+        "vosk_model_path": str(VOSK_MODEL_PATH),
+    }
+
+
+def runtime_config_summary() -> str:
+    return f"STT={STT_PROVIDER}, LLM={LLM_PROVIDER}, TTS={TTS_PROVIDER}"
+
+
+def _ask_llm_groq(messages: list[dict[str, str]]) -> str:
+    response = _client().chat.completions.create(
+        model=LLM_MODEL,
+        messages=messages,
+        max_tokens=150,
+        temperature=0.3,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def _ask_llm_llama(messages: list[dict[str, str]]) -> str:
+    payload = json.dumps(
+        {
+            "model": LLAMA_SERVER_MODEL,
+            "messages": messages,
+            "max_tokens": 150,
+            "temperature": 0.3,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        f"{LLAMA_SERVER_URL}/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"로컬 LLM 응답 요청에 실패했습니다: {detail or exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"로컬 LLM 서버에 연결할 수 없습니다: {LLAMA_SERVER_URL}") from exc
+
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError("로컬 LLM 응답에 choices가 없습니다.")
+    message = choices[0].get("message") or {}
+    content = (message.get("content") or "").strip()
+    if not content:
+        raise RuntimeError("로컬 LLM 응답 본문이 비어 있습니다.")
+    return content
 
 
 def ask_llm(user_text: str, history: list = None) -> str:
@@ -60,13 +238,10 @@ def ask_llm(user_text: str, history: list = None) -> str:
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": user_text})
-    response = _client().chat.completions.create(
-        model=LLM_MODEL,
-        messages=messages,
-        max_tokens=150,
-        temperature=0.3,
-    )
-    return response.choices[0].message.content.strip()
+    provider = _normalize_provider("LLM", LLM_PROVIDER, {"groq", "llama"})
+    if provider == "llama":
+        return _ask_llm_llama(messages)
+    return _ask_llm_groq(messages)
 
 
 def ask_gemma(user_text: str) -> str:
@@ -176,12 +351,12 @@ def run_once(seconds: int, input_device: str, sink: str, sample_rate: int) -> bo
     temp_wav = Path("/tmp/rock3c_voice_turn.wav")
     print("[1/4] Recording...")
     record_wav(temp_wav, input_device, seconds, sample_rate)
-    print("[2/4] Transcribing (Groq Whisper)...")
+    print(f"[2/4] Transcribing ({STT_PROVIDER})...")
     text = transcribe_ko(temp_wav)
     print(f"[STT] {text or '(empty)'}")
     if not text:
         return False
-    print(f"[3/4] LLM (Groq)...")
+    print(f"[3/4] LLM ({LLM_PROVIDER})...")
     reply = ask_llm(text)
     print(f"[LLM] {reply}")
     print(f"[4/4] Speaking ({TTS_PROVIDER})...")

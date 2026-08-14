@@ -11,3 +11,9 @@ logs/
 *.log
 .env
 artifacts/
+
+# SD ì¹´ë“œ ?´ë?ì§€ - 6GBê¸? git ?€ 100MB ?˜ë“œë¸”ë¡ (2026-08-14)
+sd-backup/
+*.img
+*.img.gz
+
