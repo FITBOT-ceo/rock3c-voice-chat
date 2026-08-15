@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.voice_turn_loop import ask_llm, preload_vosk_model, speak_tts, transcribe_ko
+from scripts.latency_logger import write_record as write_latency_record
 
 UPLOAD_DIR = ROOT / "uploads"
 LOG_LIMIT = 50
@@ -174,6 +175,16 @@ def chat():
         if not user_text:
             info = probe_audio_file(DEBUG_WAV_PATH)
             total_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            write_latency_record({
+                "request_id": request_id,
+                "source": "web",
+                "result": "empty_stt",
+                "convert_ms": convert_ms,
+                "stt_ms": stt_ms,
+                "llm_ms": 0,
+                "tts_ms": 0,
+                "total_ms": total_ms,
+            })
             app.logger.warning(
                 "VOICE_CHAT request_id=%s convert_ms=%s stt_ms=%s llm_ms=0 tts_ms=0 total_ms=%s result=empty_stt audio=%s",
                 request_id,
@@ -203,6 +214,12 @@ def chat():
             "tts_ms": tts_ms,
             "total_ms": total_ms,
         }
+        write_latency_record({
+            "request_id": request_id,
+            "source": "web",
+            "result": "ok",
+            **timing,
+        })
         app.logger.warning(
             "VOICE_CHAT request_id=%s convert_ms=%s stt_ms=%s llm_ms=%s tts_ms=%s total_ms=%s user_text=%r assistant_text=%r",
             request_id,
