@@ -10,7 +10,12 @@
 #
 # 차단 규약: exit 2 + stderr 메시지
 
-exec 2>/dev/tty 2>/dev/null || true
+# ⚠️ 여기에 `exec 2>/dev/tty 2>/dev/null || true` 가 있었다 — 제거했다(2026-08-15).
+#    bash 는 리다이렉션을 왼쪽부터 적용하므로 최종 fd2 는 **/dev/null** 이 된다.
+#    즉 /dev/tty 가 열리는 환경(사장님 터미널 세션)에서는 block() 의 차단 사유가
+#    통째로 사라지고 exit 2 만 남아, 에이전트가 **왜 막혔는지 모른 채 재시도**한다.
+#    이 환경에서 사유가 보였던 건 /dev/tty 가 없어 exec 가 통째로 실패한 덕이다 — 우연이다.
+#    hook 의 stderr 는 Claude Code 가 읽어 사유로 쓴다. 건드리지 않는 것이 맞다.
 INPUT=$(cat 2>/dev/null) || exit 0
 
 block() { echo "🚫 [zerolane 헌법] $1" >&2; exit 2; }
