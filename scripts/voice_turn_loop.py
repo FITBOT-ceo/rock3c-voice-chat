@@ -173,19 +173,37 @@ def record_wav(output_path: Path, device: str, seconds: int, sample_rate: int) -
 
 
 def run_once(seconds: int, input_device: str, sink: str, sample_rate: int) -> bool:
+    from latency_logger import LatencyTimer
+
     temp_wav = Path("/tmp/rock3c_voice_turn.wav")
+    timer = LatencyTimer(source="cli")
+
     print("[1/4] Recording...")
-    record_wav(temp_wav, input_device, seconds, sample_rate)
+    with timer.stage("record"):
+        record_wav(temp_wav, input_device, seconds, sample_rate)
+
     print("[2/4] Transcribing (Groq Whisper)...")
-    text = transcribe_ko(temp_wav)
+    with timer.stage("stt"):
+        text = transcribe_ko(temp_wav)
     print(f"[STT] {text or '(empty)'}")
     if not text:
+        timer.set_meta(result="empty_stt")
+        rec = timer.write()
+        print(f"[TIMING] {rec}")
         return False
-    print(f"[3/4] LLM (Groq)...")
-    reply = ask_llm(text)
+
+    print("[3/4] LLM (Groq)...")
+    with timer.stage("llm"):
+        reply = ask_llm(text)
     print(f"[LLM] {reply}")
+
     print(f"[4/4] Speaking ({TTS_PROVIDER})...")
-    speak_tts(reply, sink)
+    with timer.stage("tts"):
+        speak_tts(reply, sink)
+
+    timer.set_meta(tts_provider=TTS_PROVIDER, stt_model=STT_MODEL, llm_model=LLM_MODEL)
+    rec = timer.write()
+    print(f"[TIMING] {rec}")
     print("Done.")
     return True
 
